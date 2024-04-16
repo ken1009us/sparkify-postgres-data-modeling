@@ -11,11 +11,16 @@ conn = psycopg2.connect("host=XXXXXX port=XXXX dbname=sparkifydb user=student pa
 
 
 def get_files(data_dir):
-    """Get all files in the data directory.
+    """
+    Walk through the given directory, collect all JSON files, and load their contents into a DataFrame.
+
+    Parameters:
+        data_dir (str): The directory path that contains JSON files to be read.
 
     Returns:
-        list: A list of all files in the data directory
+        pd.DataFrame: A DataFrame containing all data aggregated from the JSON files found in the provided directory.
     """
+
 
     all_data = []
     for root, dirs, files in os.walk(data_dir):
@@ -33,6 +38,16 @@ def get_files(data_dir):
 
 
 def extract_song_data(songs_df):
+    """
+    Extract song data from the DataFrame and insert it into the 'songs' table in the database.
+
+    Parameters:
+        songs_df (pd.DataFrame): DataFrame containing song data.
+
+    Side Effects:
+        Inserts data into the 'songs' table of the database. Commits the transaction and handles any exceptions by rolling back.
+    """
+
     selected_columns = ['song_id', 'title', 'artist_id', 'year', 'duration']
     song_df = songs_df[selected_columns]
 
@@ -56,6 +71,16 @@ def extract_song_data(songs_df):
 
 
 def extract_artist_data(songs_df):
+    """
+    Extract artist data from the DataFrame and insert it into the 'artists' table in the database.
+
+    Parameters:
+        songs_df (pd.DataFrame): DataFrame containing artist data.
+
+    Side Effects:
+        Inserts data into the 'artists' table of the database. Commits the transaction and handles any exceptions by rolling back.
+    """
+
     selected_columns = ['artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude']
     artist_df = songs_df[selected_columns]
 
@@ -79,6 +104,16 @@ def extract_artist_data(songs_df):
 
 
 def extract_time_data(log_files_df):
+    """
+    Process log files to extract time data and insert it into the 'time' table in the database.
+
+    Parameters:
+        log_files_df (pd.DataFrame): DataFrame containing log entries.
+
+    Side Effects:
+        Inserts data into the 'time' table of the database. Commits the transaction and handles any exceptions by rolling back.
+    """
+
     log_df = log_files_df[log_files_df['page'] == 'NextSong']
     log_df['ts'] = pd.to_datetime(log_df['ts'], unit='ms')
 
@@ -115,6 +150,16 @@ def extract_time_data(log_files_df):
 
 
 def extract_user_data(log_files_df):
+    """
+    Extract user data from the log files DataFrame and insert/update it into the 'users' table in the database.
+
+    Parameters:
+        log_files_df (pd.DataFrame): DataFrame containing user data from log files.
+
+    Side Effects:
+        Inserts or updates data into the 'users' table of the database based on the user_id. Commits the transaction and handles any exceptions by rolling back.
+    """
+
     user_df = log_files_df[['userId', 'firstName', 'lastName', 'gender', 'level']]
     user_df = user_df[user_df['userId'].apply(lambda x: x.isdigit())]
     user_df = user_df.drop_duplicates(subset=['userId'])
@@ -140,6 +185,16 @@ def extract_user_data(log_files_df):
 
 
 def extract_songplay_data(log_files_df):
+    """
+    Process log files to extract songplay data and insert it into the 'songplays' table in the database.
+
+    Parameters:
+        log_files_df (pd.DataFrame): DataFrame containing log entries filtered by 'NextSong' action.
+
+    Side Effects:
+        Queries for matching song and artist IDs based on song title, artist name, and duration. Inserts songplay records into the 'songplays' table. Commits the transaction and handles any exceptions by rolling back.
+    """
+
     song_select = ("SELECT songs.song_id, artists.artist_id FROM songs \
                     JOIN artists ON songs.artist_id = artists.artist_id \
                     WHERE songs.title = %s AND artists.name = %s AND songs.duration = %s")
@@ -179,6 +234,10 @@ def extract_songplay_data(log_files_df):
 
 
 def main():
+    """
+    Main function to manage the workflow of loading data from files and inserting it into a PostgreSQL database.
+    """
+
     # data_dir = "data/song_data"
     # songs_df = get_files(data_dir)
 
@@ -194,6 +253,8 @@ def main():
     # extract_user_data(log_files_df)
 
     # extract_songplay_data(log_files_df)
+
+    conn.close()
 
 
 
