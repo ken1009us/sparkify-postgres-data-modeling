@@ -7,7 +7,7 @@ import json
 from sql_queries import *
 
 
-conn = psycopg2.connect("host=127.0.0.1 port=5435 dbname=sparkifydb user=student password=student")
+conn = psycopg2.connect("host=XXXXXX port=XXXX dbname=sparkifydb user=student password=student")
 
 
 def get_files(data_dir):
@@ -95,17 +95,106 @@ def extract_time_data(log_files_df):
     column_labels = ["start_time", "hour", "day", "week", "month", "year", "weekday"]
     time_df = pd.DataFrame(time_data, columns=column_labels)
 
-    print(time_df.head())
+    if not time_df.empty:
+        time_data = time_df.values.tolist()
+    else:
+        time_data = []
+
+    time_table_insert = ("INSERT INTO time (start_time, hour, day, week, month, year, weekday) VALUES(%s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING")
+
+    try:
+        cur = conn.cursor()
+        for time in time_data:
+            cur.execute(time_table_insert, time)
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"Error: {e}")
+        if conn:
+            conn.rollback()
+
+
+def extract_user_data(log_files_df):
+    user_df = log_files_df[['userId', 'firstName', 'lastName', 'gender', 'level']]
+    user_df = user_df[user_df['userId'].apply(lambda x: x.isdigit())]
+    user_df = user_df.drop_duplicates(subset=['userId'])
+
+    if not user_df.empty:
+        user_data = user_df.values.tolist()
+    else:
+        user_data = []
+
+    user_table_insert = ("INSERT INTO users (user_id, first_name, last_name, gender, level) VALUES(%s, %s, %s, %s, %s) \
+                            ON CONFLICT (user_id) DO UPDATE SET level = EXCLUDED.level")
+
+    try:
+        cur = conn.cursor()
+        for user in user_data:
+            cur.execute(user_table_insert, user)
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"Error: {e}")
+        if conn:
+            conn.rollback()
+
+
+def extract_songplay_data(log_files_df):
+    song_select = ("SELECT songs.song_id, artists.artist_id FROM songs \
+                    JOIN artists ON songs.artist_id = artists.artist_id \
+                    WHERE songs.title = %s AND artists.name = %s AND songs.duration = %s")
+
+    songplay_table_insert = ("INSERT INTO songplays (start_time, user_id, level, song_id, artist_id, session_id, location, user_agent) \
+                                VALUES(%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING")
+
+    filtered_df = log_files_df[(log_files_df['page'] == 'NextSong') & (log_files_df['userId'].apply(lambda x: x.isdigit()))]
+    filtered_df['start_time'] = pd.to_datetime(filtered_df['ts'], unit='ms')
+    log_files_list = filtered_df.to_dict('records')
+
+    try:
+        cur = conn.cursor()
+
+        for row in log_files_list:
+            cur.execute(song_select, (row['song'], row['artist'], row['length']))
+            result = cur.fetchone()
+
+            if result:
+                song_id, artist_id = result
+            else:
+                song_id, artist_id = None, None
+
+            songplay_data = (
+                row['start_time'], row['userId'], row['level'], song_id, artist_id,
+                row['sessionId'], row['location'], row['userAgent']
+            )
+
+            cur.execute(songplay_table_insert, songplay_data)
+
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"Error: {e}")
+        if conn:
+            conn.rollback()
 
 
 def main():
     # data_dir = "data/song_data"
     # songs_df = get_files(data_dir)
+
     # extract_song_data(songs_df)
+
     # extract_artist_data(songs_df)
-    log_data_dir = "data/log_data"
-    log_files_df = get_files(log_data_dir)
-    extract_time_data(log_files_df)
+
+    # log_data_dir = "data/log_data"
+    # log_files_df = get_files(log_data_dir)
+
+    # extract_time_data(log_files_df)
+
+    # extract_user_data(log_files_df)
+
+    # extract_songplay_data(log_files_df)
+
 
 
 
