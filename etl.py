@@ -30,3 +30,26 @@ def get_files(data_dir):
         return pd.DataFrame(all_data)
 
     return pd.DataFrame()
+
+
+def extract_song_data(songs_df):
+    selected_columns = ['song_id', 'title', 'artist_id', 'year', 'duration']
+    song_df = songs_df[selected_columns]
+
+    if not song_df.empty:
+        song_data = song_df.values.tolist()
+    else:
+        song_data = []
+
+    song_table_insert = ("INSERT INTO songs (song_id, title, artist_id, year, duration) VALUES(%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING")
+
+    try:
+        cur = conn.cursor()
+        for song in song_data:
+            cur.execute(song_table_insert, song)
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        print(f"Error: {e}")
+        if conn:
+            conn.rollback()
